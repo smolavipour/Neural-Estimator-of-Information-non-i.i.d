@@ -1,14 +1,17 @@
 import time
 import numpy as np
 import pickle
-#from numpy.linalg import det
-
+import argparse
 import CMINE_lib as CMINE
 
-#-----------------------------------------------------------------#    
-#--------------- Create the dataset ------------------------------#
-#-----------------------------------------------------------------#    
 
+################## Parsing simulation arguments ##################
+
+parser = argparse.ArgumentParser(description='provide arguments for DI estimation')
+parser.add_argument('--link', type=str, default=None, help='Example X_Y for I(X->Y), or X_Y-Z for I(X->Y||Z)')
+args = parser.parse_args()
+
+Link = args.link
 n = int(2e5)
 
 sigma_x = 3
@@ -21,19 +24,52 @@ B = np.asarray([[0,0,0],[a_1,0,0],[0,a_2,0]])
 
 params = (A,B,sigma_x,sigma_y,sigma_z)
 
-#Estimate I(X->Y) or equivalently I(X_1 X_2 X_3;Y_3|Y_1 Y_2)
-Link= 'X_Y'
+if Link == 'X_Y':
+    #Estimate I(X->Y) or equivalently I(X_1 X_2 X_3;Y_3|Y_1 Y_2)
+    True_DI = 0.5*np.log(1+ a_1**2 * sigma_x**2/sigma_y**2)
+    arrng = [[0,3,6],[1],[4,7]]
+elif Link == 'X_Z':
+    True_DI = 0.5*np.log(1+ (a_1**2 * a_2**2 * sigma_x**2 )/(a_2**2 * sigma_y**2 + sigma_z**2))
+    arrng = [[0,3,6],[2],[5,8]]
+elif Link == 'Y_X':
+    True_DI = 0
+    arrng = arrng = [[1,4,7],[0],[3,6]]
+elif Link == 'Y_Z':
+    True_DI = 0.5*np.log(1+ (a_1**2 * a_2**2 * sigma_x**2 + a_2**2 * sigma_y**2)/sigma_z**2)
+    arrng = [[1,4,7],[2],[5,8]]
+elif Link == 'Z_X':
+    True_DI = 0   
+    arrng = [[2,5,8],[0],[3,6]]
+elif Link == 'Z_Y':
+    True_DI = 0
+    arrng = [[2,5,8],[1],[4,7]]
+###########################################
+elif Link == 'X_Y-Z':
+    #Estimate I(X->Y||Z) or equivalently I(X_1 X_2 X_3;Y_3|Y_1 Y_2 Z_1 Z_2 Z_3)
+    True_DI = 0.5*np.log(1+ a_1**2 * sigma_x**2/sigma_y**2)
+    arrng = [[0,3,6],[1],[4,7,2,5,8]]
+elif Link == 'X_Z-Y':
+    True_DI = 0
+    arrng = [[0,3,6],[2],[5,8,1,4,7]]
+elif Link == 'Y_X-Z':
+    True_DI = 0
+    arrng = [[1,4,7],[0],[3,6,2,5,8]]
+elif Link == 'Y_Z-X':
+    True_DI = 0.5*np.log(1+ (a_2**2 * sigma_y**2)/sigma_z**2)
+    arrng = [[1,4,7],[2],[5,8,0,3,6]]
+elif Link == 'Z_X-Y':
+    True_DI = 0   
+    arrng = [[2,5,8],[0],[3,6,1,4,7]]
+elif Link == 'Z_Y-X':
+    True_DI = 0
+    arrng = [[2,5,8],[1],[4,7,0,3,6]]
+else:
+    print('Wrong link input')
+    pass
 
-#True_CMI = 0.5*np.log(1+ (sigma_y**2+sigma_z**2)/(sigma_x**2))
-#True_CMI=0
-True_DI = 0.5*np.log(1+ a_1**2 * sigma_x**2/sigma_y**2)
 
 K = 2
 b_size = n//2
-
-#----------------------------------------------------------------------#
-#------------------------Train the network-----------------------------#
-#----------------------------------------------------------------------#
 
 # Set up neural network paramters
 LR = 1e-3
@@ -56,19 +92,18 @@ DI_DV = []
 
 for s in range(S):
     DI_DV_t = []
-        
+    print('s=',s)    
+    
     #Create dataset
     dataset = CMINE.create_dataset(GenModel='Markov_Gaussian_2', Params=params, N=n)
     dataset = CMINE.prepare_dataset(dataset, Mode='norm',S=4)
     #[x,y,z,x_,y_,z_,x__,y__,z__]
-    
-    arrng = [[0,3,6],[1],[4,7]]
 
     for t in range(T): 
+        print('t=',t)
         start_time = time.time()
         
         batch_train, target_train, joint_test, prod_test = CMINE.batch_construction(data=dataset, arrange=arrng, set_size=b_size, K_neighbor=K)    
-        print('Duration of data preparation: ',time.time()-start_time,' seconds')
         
         DI_DV_Eval=[]
 
@@ -80,9 +115,8 @@ for s in range(S):
         else:   
             model, loss_e = CMINE.train_classifier(BatchTrain=batch_train, TargetTrain=target_train, Params=NN_params, Epoch=EPOCH, Lr=LR, Seed=SEED)
         
-        #Compute I(X_1;Y_1|Z_1)
+        #Compute directed information
         DI_est = CMINE.estimate_CMI(model, joint_test, prod_test)
-        #print(DI_est)
     
         print('Duration: ', time.time()-start_time, ' seconds')               
         print('DV=',DI_est[1])   
