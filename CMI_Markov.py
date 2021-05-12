@@ -62,7 +62,6 @@ for sigma_x in sigma_v:
             start_time = time.time()
             
             batch_train, target_train, joint_test, prod_test = CMINE.batch_construction(data=dataset, arrange=arrng, set_size=b_size, K_neighbor=K)    
-            print('Duration of data preparation: ',time.time()-start_time,' seconds')
             
             CMI_DV_Eval=[]
     
@@ -85,7 +84,6 @@ for sigma_x in sigma_v:
             
         CMI_DV.append(np.mean(CMI_DV_t))
         
-    file = open('Data/CMI/result_d_'+str(cntr), 'wb')
+    file = open('Data/CMI/result_'+str(cntr), 'wb')
     pickle.dump((True_CMI,CMI_DV,CMI_DV_Eval,n,K,LR,EPOCH,loss_e,params), file)
-
 file.close()    
